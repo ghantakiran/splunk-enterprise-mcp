@@ -19,7 +19,11 @@ class ModelContext:
 
     @staticmethod
     def from_json(data: str) -> 'ModelContext':
-        return ModelContext(**json.loads(data))
+        d = json.loads(data)
+        # Only keep fields that are in the dataclass
+        allowed = {f.name for f in ModelContext.__dataclass_fields__.values()}
+        filtered = {k: v for k, v in d.items() if k in allowed}
+        return ModelContext(**filtered)
 
     @staticmethod
     def new(name: str, version: str, owner: str, metadata: Optional[Dict[str, Any]] = None, custom: Optional[Dict[str, Any]] = None) -> 'ModelContext':
