@@ -2,6 +2,10 @@
 
 This project implements a Model Context Protocol (MCP) for managing, exchanging, and tracing the context of machine learning/data models within Splunk.
 
+## Security & Modularity
+- **Security:** All credentials (Splunk HEC tokens, passwords) are handled via environment variables. No secrets are hardcoded. Follow best practices for secret management.
+- **Modularity:** The codebase is organized into modular components (SDK, logging, UI, integration) for maintainability and future expansion.
+
 ## Quickstart
 
 1. **Install dependencies:**

@@ -3,33 +3,63 @@ from integration.splunk_search import SplunkSearchHelper
 import pandas as pd
 from datetime import datetime, timedelta
 from integration.export_utils import export_to_csv, export_to_excel
+import os
+from integration.splunk_logger import SplunkLogger
+from common.auth import authenticate, logout, is_admin
 
 # --- Branding ---
 st.image("https://splunk-marketing.s3.amazonaws.com/logos/splunk-logo.png", width=180, caption="Model Context Protocol Dashboard", use_column_width=False)
 st.title("Splunk Enterprise User MCP Dashboard")
 
 # --- Simple Authentication (demo only) ---
-USERS = {
-    "admin": {"password": "adminpass", "role": "admin"},
-    "user": {"password": "userpass", "role": "user"}
-}
+# Setup SplunkLogger for auth logging
+SPLUNK_HEC_URL = os.getenv("SPLUNK_HEC_URL")
+SPLUNK_HEC_TOKEN = os.getenv("SPLUNK_HEC_TOKEN")
+SPLUNK_INDEX = os.getenv("SPLUNK_INDEX", "main")
+logger = None
+if SPLUNK_HEC_URL and SPLUNK_HEC_TOKEN:
+    logger = SplunkLogger(SPLUNK_HEC_URL, SPLUNK_HEC_TOKEN, SPLUNK_INDEX)
+
+def log_auth_action(user, action, status, session_id=None):
+    if logger:
+        event = {
+            "user": user,
+            "action": action,
+            "status": status,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "session_id": session_id or user
+        }
+        logger.log_event(event, sourcetype="mcp:auth_event")
+
 if 'authenticated' not in st.session_state:
     st.session_state['authenticated'] = False
 if 'username' not in st.session_state:
     st.session_state['username'] = ''
+if 'role' not in st.session_state:
+    st.session_state['role'] = ''
+if 'session_id' not in st.session_state:
+    st.session_state['session_id'] = ''
+
 if not st.session_state['authenticated']:
     st.sidebar.header("Login")
     username = st.sidebar.text_input("Username")
     password = st.sidebar.text_input("Password", type="password")
     if st.sidebar.button("Login"):
-        if username in USERS and USERS[username]["password"] == password:
-            st.session_state['authenticated'] = True
-            st.session_state['username'] = username
-            st.session_state['role'] = USERS[username]["role"]
-            st.success(f"Logged in as {username} ({USERS[username]['role']})")
+        if authenticate(username, password, st.session_state):
+            st.success(f"Logged in as {username} ({st.session_state['role']})")
         else:
             st.error("Invalid username or password.")
     st.stop()
+else:
+    # Show logout button
+    if st.sidebar.button("Logout"):
+        logout(st.session_state)
+        try:
+            rerun_fn = getattr(st, 'experimental_rerun', None) or getattr(st, '_rerun', None)
+            if rerun_fn:
+                rerun_fn()
+        except Exception:
+            pass
 role = st.session_state.get('role', 'user')
 
 # --- UI/UX: Dark mode toggle ---
