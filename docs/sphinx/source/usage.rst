@@ -1,6 +1,12 @@
 Usage
 =====
 
+.. note::
+   **Security:** All credentials (Splunk HEC tokens, passwords) are handled via environment variables. No secrets are hardcoded. Follow best practices for secret management.
+
+.. note::
+   **Modularity:** The codebase is organized into modular components (SDK, logging, UI, integration) for maintainability and future expansion.
+
 Install dependencies:
 
 .. code-block:: bash
