@@ -1,45 +1,45 @@
-# Splunk Enterprise Managed Control Panel (MCP)
+# Model Context Protocol (MCP) for Splunk
 
-This project provides a modular Managed Control Panel (MCP) for Splunk Enterprise, built with Python and Streamlit. It is split into two main modules:
+This project implements a Model Context Protocol (MCP) for managing, exchanging, and tracing the context of machine learning/data models within Splunk.
 
-- **User MCP**: For end-users to interact with Splunk data and dashboards.
-- **Admin MCP**: For administrators to manage users, permissions, and monitor activity.
+## Quickstart
 
-All actions are traceable and auditable within Splunk.
-
-## Project Structure
-
-```
-MCP-Works/
-│
-├── mcp_user/      # User MCP Streamlit app
-├── mcp_admin/     # Admin MCP Streamlit app
-├── common/        # Shared utilities (logging, Splunk SDK wrappers, etc.)
-├── .streamlit/    # Streamlit configuration
-├── requirements.txt
-└── README.md
-```
-
-## Getting Started
-
-1. Install dependencies:
+1. **Install dependencies:**
    ```bash
    pip install -r requirements.txt
    ```
-2. Run the User MCP:
+2. **Set up Splunk HEC credentials:**
+   - Set environment variables:
+     - `SPLUNK_HEC_URL` (e.g., `https://splunk.example.com:8088`)
+     - `SPLUNK_HEC_TOKEN` (your HEC token)
+     - `SPLUNK_INDEX` (optional, default: `main`)
+3. **Run an example:**
    ```bash
-   streamlit run mcp_user/app.py
+   python examples/emit_model_event.py
    ```
-3. Run the Admin MCP:
-   ```bash
-   streamlit run mcp_admin/app.py
-   ```
+
+## Example Usage
+
+```python
+from mcp.sdk import MCPClient
+
+client = MCPClient()
+ctx = client.create_context("my_model", "1.0", "alice", metadata={"framework": "sklearn"})
+event = client.emit_event("model_deployed", ctx, {"deployed_by": "mlops"})
+client.log_event(event)
+```
+
+## Documentation
+- [Sphinx Docs (API, Usage, Guides)](docs/sphinx/build/html/index.html)
+- [GitHub Wiki](https://github.com/ghantakiran/splunk-enterprise-mcp/wiki)
+- [Splunk Search Examples](docs/splunk_search_examples.md)
 
 ## Features
-- Modular codebase for easy maintenance
-- Full traceability of user and admin actions
-- Modern, interactive UI with Streamlit
-- Integration with Splunk Enterprise via SDK and REST API
+- Model context schema and serialization
+- Model lifecycle event tracking
+- Splunk integration for logging and traceability
+- Python SDK for easy integration
+- TDD and CI ready
 
----
-For more details, see the documentation in each module.
+## Issues & Roadmap
+See the GitHub Issues for protocol, integration, TDD, and documentation tasks.
