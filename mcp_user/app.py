@@ -87,7 +87,44 @@ def build_spl_query(types, start, end):
 
 query = build_spl_query(selected_types, start_date, end_date)
 
-# --- Main dashboard ---
+# --- User Dashboard Access Control ---
+if 'dashboards' not in st.session_state:
+    # Assign dashboards based on user/role (demo: user gets user_dashboard, admin gets all)
+    if st.session_state.get('role') == 'admin':
+        st.session_state['dashboards'] = ["user_dashboard", "model_overview", "admin_dashboard"]
+    else:
+        st.session_state['dashboards'] = ["user_dashboard", "model_overview"]
+
+assigned_dashboards = st.session_state['dashboards']
+
+# --- User Dashboard Selector ---
+st.sidebar.header("Dashboards")
+selected_dashboard = st.sidebar.selectbox("Select Dashboard", assigned_dashboards)
+
+def log_user_action(action, **kwargs):
+    if logger:
+        event = {
+            "user": st.session_state.get('username', ''),
+            "action": action,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "session_id": st.session_state.get('session_id', '')
+        }
+        event.update(kwargs)
+        logger.log_event(event, sourcetype="mcp:user_action")
+
+# --- Dashboard Access Control ---
+def can_access_dashboard(dashboard):
+    return dashboard in assigned_dashboards
+
+if not can_access_dashboard(selected_dashboard):
+    st.error("You do not have access to this dashboard.")
+    log_user_action("dashboard_access_denied", dashboard=selected_dashboard)
+    st.stop()
+else:
+    log_user_action("view_dashboard", dashboard=selected_dashboard)
+    st.success(f"Accessing dashboard: {selected_dashboard}")
+
+# --- Main dashboard (search/visualization) ---
 st.header("MCP Event Search & Visualization")
 st.subheader("SPL Query")
 st.code(query, language="spl")
@@ -96,6 +133,7 @@ if st.button("Run Search & Visualize"):
     with st.spinner("Searching Splunk and preparing dashboard..."):
         helper = SplunkSearchHelper()
         results = helper.search_mcp_events(query)
+        log_user_action("search", query=query, result_count=len(results) if results else 0)
         if results:
             st.success(f"Found {len(results)} events.")
             df = pd.DataFrame(results)
