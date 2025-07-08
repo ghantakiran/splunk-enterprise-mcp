@@ -3,34 +3,99 @@ from integration.splunk_search import SplunkSearchHelper
 import pandas as pd
 from datetime import datetime, timedelta
 from integration.export_utils import export_to_csv, export_to_excel
+import os
+from integration.splunk_logger import SplunkLogger
+from common.auth import authenticate, logout, is_admin
+from integration.splunk_user_mgmt import SplunkUserManager
 
 # --- Branding ---
 st.image("https://splunk-marketing.s3.amazonaws.com/logos/splunk-logo.png", width=180, caption="Model Context Protocol Dashboard", use_column_width=False)
 st.title("Splunk Enterprise Admin MCP Dashboard")
 
 # --- Simple Authentication (demo only) ---
-USERS = {
-    "admin": {"password": "adminpass", "role": "admin"},
-    "user": {"password": "userpass", "role": "user"}
-}
 if 'authenticated' not in st.session_state:
     st.session_state['authenticated'] = False
 if 'username' not in st.session_state:
     st.session_state['username'] = ''
+if 'role' not in st.session_state:
+    st.session_state['role'] = ''
+if 'session_id' not in st.session_state:
+    st.session_state['session_id'] = ''
+
 if not st.session_state['authenticated']:
     st.sidebar.header("Login")
     username = st.sidebar.text_input("Username")
     password = st.sidebar.text_input("Password", type="password")
     if st.sidebar.button("Login"):
-        if username in USERS and USERS[username]["password"] == password:
-            st.session_state['authenticated'] = True
-            st.session_state['username'] = username
-            st.session_state['role'] = USERS[username]["role"]
-            st.success(f"Logged in as {username} ({USERS[username]['role']})")
+        if authenticate(username, password, st.session_state):
+            st.success(f"Logged in as {username} ({st.session_state['role']})")
         else:
             st.error("Invalid username or password.")
     st.stop()
+else:
+    if st.sidebar.button("Logout"):
+        logout(st.session_state)
+        try:
+            rerun_fn = getattr(st, 'experimental_rerun', None) or getattr(st, '_rerun', None)
+            if rerun_fn:
+                rerun_fn()
+        except Exception:
+            pass
 role = st.session_state.get('role', 'admin')
+
+# --- Admin User Management (sidebar, admin only) ---
+def log_admin_action(action, **kwargs):
+    SPLUNK_HEC_URL = os.getenv("SPLUNK_HEC_URL")
+    SPLUNK_HEC_TOKEN = os.getenv("SPLUNK_HEC_TOKEN")
+    SPLUNK_INDEX = os.getenv("SPLUNK_INDEX", "main")
+    logger = None
+    if SPLUNK_HEC_URL and SPLUNK_HEC_TOKEN:
+        logger = SplunkLogger(SPLUNK_HEC_URL, SPLUNK_HEC_TOKEN, SPLUNK_INDEX)
+    if logger:
+        event = {
+            "user": st.session_state.get('username', ''),
+            "action": action,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "session_id": st.session_state.get('session_id', '')
+        }
+        event.update(kwargs)
+        logger.log_event(event, sourcetype="mcp:admin_action")
+
+if is_admin(st.session_state):
+    with st.sidebar.expander("User Management", expanded=False):
+        st.markdown("**Add User**")
+        new_username = st.text_input("New Username")
+        new_password = st.text_input("New Password", type="password")
+        new_role = st.selectbox("Role", ["user", "admin"])
+        if st.button("Add User"):
+            try:
+                mgr = SplunkUserManager()
+                result = mgr.add_user(new_username, new_password, new_role)
+                st.success(f"User {result['username']} added as {result['role']}.")
+                log_admin_action("add_user", target_user=new_username, target_role=new_role)
+            except Exception as e:
+                st.error(f"Failed to add user: {e}")
+        st.markdown("**Update User Role**")
+        upd_username = st.text_input("Update Username")
+        upd_role = st.selectbox("New Role", ["user", "admin"], key="upd_role")
+        if st.button("Update User Role"):
+            try:
+                mgr = SplunkUserManager()
+                result = mgr.update_user_role(upd_username, upd_role)
+                st.success(f"User {result['username']} role updated to {result['role']}.")
+                log_admin_action("update_user_role", target_user=upd_username, target_role=upd_role)
+            except Exception as e:
+                st.error(f"Failed to update user role: {e}")
+        st.markdown("**Remove User**")
+        del_username = st.text_input("Delete Username")
+        if st.button("Remove User"):
+            try:
+                mgr = SplunkUserManager()
+                mgr.remove_user(del_username)
+                st.success(f"User {del_username} removed.")
+                log_admin_action("remove_user", target_user=del_username)
+            except Exception as e:
+                st.error(f"Failed to remove user: {e}")
 
 # --- UI/UX: Dark mode toggle ---
 if 'dark_mode' not in st.session_state:

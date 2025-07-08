@@ -273,4 +273,44 @@ with st.expander("Help & About", expanded=False):
     """)
 
 # Placeholder for future features
-st.info("User features coming soon: search, dashboards, activity logs, and more.") 
+st.info("User features coming soon: search, dashboards, activity logs, and more.")
+
+# --- User Activity Log View ---
+def fetch_user_activity_logs(username):
+    if not logger or not username:
+        return []
+    helper = SplunkSearchHelper()
+    # Search for user actions in Splunk
+    query = f'search index=main sourcetype=mcp:user_action user="{username}" | table timestamp action session_id request_type details dashboard query result_count'
+    return helper.search_mcp_events(query)
+
+with st.sidebar.expander("My Activity Log", expanded=False):
+    if st.button("View My Activity Log"):
+        logs = fetch_user_activity_logs(st.session_state.get('username', ''))
+        if logs:
+            df = pd.DataFrame(logs)
+            st.dataframe(df)
+            log_user_action("view_activity_log")
+        else:
+            st.info("No activity log entries found.")
+
+# --- User Request/Ticket Submission ---
+with st.sidebar.expander("Submit Request/Ticket", expanded=False):
+    request_type = st.selectbox("Request Type", ["data_access", "bug_report", "feature_request", "other"])
+    request_details = st.text_area("Details", "")
+    if st.button("Submit Request/Ticket"):
+        if request_details.strip():
+            event = {
+                "user": st.session_state.get('username', ''),
+                "action": "submit_request",
+                "request_type": request_type,
+                "details": request_details,
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "session_id": st.session_state.get('session_id', '')
+            }
+            if logger:
+                logger.log_event(event, sourcetype="mcp:user_action")
+            st.success("Request/ticket submitted and logged.")
+            log_user_action("submit_request", request_type=request_type, details=request_details)
+        else:
+            st.warning("Please enter details for your request/ticket.") 
