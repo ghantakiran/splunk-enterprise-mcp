@@ -96,6 +96,38 @@ if is_admin(st.session_state):
                 log_admin_action("remove_user", target_user=del_username)
             except Exception as e:
                 st.error(f"Failed to remove user: {e}")
+    # --- Dashboard/Alert Management ---
+    with st.sidebar.expander("Dashboard & Alert Management", expanded=False):
+        st.markdown("**Manage Dashboards**")
+        dash_action = st.selectbox("Action", ["create_dashboard", "update_dashboard", "delete_dashboard"])
+        dash_name = st.text_input("Dashboard Name")
+        if st.button("Submit Dashboard Action"):
+            log_admin_action(dash_action, dashboard=dash_name)
+            st.success(f"{dash_action.replace('_', ' ').title()} for {dash_name} logged.")
+        st.markdown("**Manage Alerts**")
+        alert_action = st.selectbox("Alert Action", ["create_alert", "update_alert", "delete_alert"])
+        alert_name = st.text_input("Alert Name")
+        if st.button("Submit Alert Action"):
+            log_admin_action(alert_action, alert=alert_name)
+            st.success(f"{alert_action.replace('_', ' ').title()} for {alert_name} logged.")
+    # --- System/User Activity Monitoring ---
+    with st.sidebar.expander("System & User Activity Monitoring", expanded=False):
+        if st.button("View All Activity Logs"):
+            helper = SplunkSearchHelper()
+            query = 'search index=main sourcetype=mcp:user_action OR sourcetype=mcp:admin_action | table timestamp user action session_id dashboard alert event_id details'
+            logs = helper.search_mcp_events(query)
+            if logs:
+                df = pd.DataFrame(logs)
+                st.dataframe(df)
+                log_admin_action("view_all_activity_logs")
+            else:
+                st.info("No activity log entries found.")
+    # --- Security/Compliance Investigation ---
+    with st.sidebar.expander("Security/Compliance Investigation", expanded=False):
+        event_id = st.text_input("Event ID to Investigate")
+        if st.button("Investigate Event"):
+            log_admin_action("investigate_security_event", event_id=event_id)
+            st.success(f"Investigation of event {event_id} logged.")
 
 # --- UI/UX: Dark mode toggle ---
 if 'dark_mode' not in st.session_state:
